@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { useWallet, useConnection } from "@solana/wallet-adapter-react";
 import { WalletNotConnectedError } from "@solana/wallet-adapter-base";
-import { makeStyles, Button, Select } from '@material-ui/core';
+import { makeStyles, Button, Select, Tooltip } from '@material-ui/core';
 import { toast } from "react-hot-toast";
 import {
     PublicKey,
@@ -39,8 +39,11 @@ const Cart = ({ cartNum, setCartNum}) => {
     const [cartList, setCartList] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
     const [priceList, setPriceList] = useState([]);
-    const [, setTotalPrice] = useState(0);
+    const [ totalPrice, setTotalPrice ] = useState(0);
     const currency = "SOL";
+    const [ availableBalance, setAvailableBalance ] = useState(0);
+    const totalPriceWithVAT = totalPrice + 1;
+    const isSufficientFunds = availableBalance >= totalPriceWithVAT
 
     const userId = localStorage.getItem('userId');
     const toPubkey = "BVmdx6PdToCmGcSPUaFCXzrzbrSzRrecbAXS7xgREdDq";
@@ -265,11 +268,24 @@ const Cart = ({ cartNum, setCartNum}) => {
         if (cartList.length > 0) {
             let newTotalPrice = 0;
             cartList.forEach(item => {
-                newTotalPrice += item.price * item.amount;
+                newTotalPrice += item.price.price * item.amount;
             });
             setTotalPrice(newTotalPrice);
         }
     }, [cartList]);
+
+    useEffect(() => {
+        if (!publicKey || !connection) return;
+
+        const checkBalance = async () => {
+            const balance = await connection.getBalance(publicKey);
+            const solBalance = balance / 1e9;
+
+            setAvailableBalance(solBalance);
+        };
+
+        checkBalance();
+    }, [publicKey, connection]);
 
     return (
         <div className='flex flex-col'>
@@ -332,11 +348,7 @@ const Cart = ({ cartNum, setCartNum}) => {
                                         <div className='mb-8'>
                                             SubTotal: 
                                             <div className='float-right'>
-                                                {
-                                                    priceList.map((item, index) => 
-                                                        <div key={index} className=''>{item.price} {item.currency}</div>
-                                                    )
-                                                }
+                                                { totalPrice }
                                             </div>
                                         </div>
                                         <div className='mb-8'>
@@ -346,14 +358,14 @@ const Cart = ({ cartNum, setCartNum}) => {
                                         <div className='mb-8 font-bold'>
                                             Total (incl. VAT.)
                                             <span className='float-right'>
-                                            {
-                                                priceList.map((item, index) => 
-                                                    <div key={index} className=''>{item.currency === "Sol" ? item.price + 1 : item.price} {item.currency}</div>
-                                                )
-                                            }
+                                            { totalPriceWithVAT }
                                             </span>
                                         </div>
-                                        <Button onClick={handleBuyAll} className={classes.button} variant="outlined">Buy All</Button>
+                                        <Tooltip disableHoverListener={isSufficientFunds} title="You have insufficient funds">
+                                            <span>
+                                                <Button fullWidth onClick={handleBuyAll} className={classes.button} disabled={!isSufficientFunds}  variant="outlined">Buy All</Button>
+                                            </span>
+                                        </Tooltip>
                                     </div>
                             }
                         </div>
